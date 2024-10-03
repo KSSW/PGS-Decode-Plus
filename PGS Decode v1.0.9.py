@@ -296,13 +296,31 @@ def read_rle_bytes(ods_bytes):
 def create_image(width, height, palette, pixels):
     if sum(len(row) for row in pixels) != width * height:
         raise ValueError("The number of pixels does not match the image dimensions")
+    
+    # 创建 RGBA 图像
     img = Image.new("RGBA", (width, height))
+    
+    # 填充像素（将YCbCr转换为RGB并设置到图像中）
     for y, row in enumerate(pixels):
         for x, pixel in enumerate(row):
             y_val, cr, cb, alpha = palette[pixel]
             r, g, b = ycbcr_to_rgb(y_val, cr, cb)
             img.putpixel((x, y), (r, g, b, alpha))
-    return img
+    
+    # 获取 alpha 通道
+    alpha = img.split()[3]
+    
+    # 创建一个透明背景的全透明图像
+    background = Image.new('RGBA', img.size, (0, 0, 0, 0))
+    
+    # 将原始图像粘贴到透明背景上，保留透明区域
+    background.paste(img, mask=alpha)
+    
+    # 将图像转换为 Indexed-8（调色板模式）
+    indexed_image = background.convert('P', palette=Image.ADAPTIVE, colors=256)
+    
+    # 返回 Indexed-8 调色板模式的图像对象
+    return indexed_image
 
 def ycbcr_to_rgb(y, cb, cr):
     r = y + 1.402 * (cr - 128)
@@ -384,86 +402,67 @@ def to_timecode_milliseconds(milliseconds):
     hours = (milliseconds // (1000 * 60 * 60)) % 24
     return f"{hours:02}:{minutes:02}:{seconds:02},{ms:03}"
 
-# 自定义的毫秒到时间码函数用于 23.976 帧
-def ms_to_timecode(ms):
-    # 定义每个帧周期的毫秒数
-    frame_period_ms = 42
-    
-    # 计算总秒数和剩余毫秒
-    total_seconds = ms // 1000
-    remaining_ms = ms % 1000
-    
-    # 计算帧数
-    frames = remaining_ms // frame_period_ms
-    # 如果剩余毫秒大于 frame_period_ms，将帧数加 1
-    if remaining_ms % frame_period_ms > 0:
-        frames += 1
-    
-    # 计算时、分、秒
+def to_timecode_frames_in(milliseconds, frame_rate):
+    total_seconds = milliseconds / 1000.0
+
+    if abs(frame_rate - 23.976) < 0.001:
+        total_frames = total_seconds * 24000 / 1001
+        frames = math.floor(total_frames % 24) + 1  # 自动加一帧
+        if frames == 24:
+            frames = 0
+            total_seconds = math.floor(total_frames / 24) + 1
+        else:
+            total_seconds = math.floor(total_frames / 24)
+    elif abs(frame_rate - 24) < 0.001 or abs(frame_rate - 25) < 0.001 or abs(frame_rate - 50) < 0.001:
+        total_frames = total_seconds * frame_rate
+        frames = math.floor(total_frames % frame_rate)  # Use floor instead of round
+        total_seconds = int(total_seconds)
+    elif abs(frame_rate - 29.97) < 0.001:
+        total_frames = total_seconds * 30000 / 1001
+        frames = math.floor(total_frames % 30)
+        total_seconds = math.floor(total_frames / 30)
+    elif abs(frame_rate - 59.94) < 0.001:
+        total_frames = total_seconds * 60000 / 1001
+        frames = math.floor(total_frames % 60)
+        total_seconds = math.floor(total_frames / 60)
+    else:
+        raise ValueError(f"Unsupported frame rate: {frame_rate}")
+
     hours = total_seconds // 3600
     minutes = (total_seconds % 3600) // 60
     seconds = total_seconds % 60
-    
-    # 格式化时间码
-    timecode = f"{hours:02}:{minutes:02}:{seconds:02}:{frames:02}"
-    return timecode
 
-# 毫秒转为 00:00:00:帧 的时间码格式，用于输入时
-def to_timecode_frames_in(milliseconds, frame_rate):
-    if abs(frame_rate - 23.976) < 0.001:
-        return ms_to_timecode(milliseconds)  # 23.976 帧的特殊处理
-    else:
-        # 原有帧率处理
-        if abs(frame_rate - 24) < 0.001 or abs(frame_rate - 25) < 0.001 or abs(frame_rate - 50) < 0.001:
-            total_frames = math.floor(milliseconds * frame_rate / 1000)
-            frames = total_frames % round(frame_rate)
-            total_seconds = total_frames // round(frame_rate)
-        elif abs(frame_rate - 29.97) < 0.001:
-            total_frames = math.floor(milliseconds * 30000 / 1001 / 1000)
-            frames = total_frames % 30
-            total_seconds = total_frames // 30
-        elif abs(frame_rate - 59.94) < 0.001:
-            total_frames = math.floor(milliseconds * 60000 / 1001 / 1000)
-            frames = total_frames % 60
-            total_seconds = total_frames // 60
-        else:
-            raise ValueError(f"Unsupported frame rate: {frame_rate}")
-        
-        # 计算时、分、秒
-        hours = total_seconds // 3600
-        minutes = (total_seconds % 3600) // 60
-        seconds = total_seconds % 60
-        
-        return f"{hours:02}:{minutes:02}:{seconds:02}:{frames:02}"
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}:{frames:02d}"
 
-# 毫秒转为 00:00:00:帧 的时间码格式，用于输出时
 def to_timecode_frames_out(milliseconds, frame_rate):
     if abs(frame_rate - 23.976) < 0.001:
-        return ms_to_timecode(milliseconds)  # 23.976 帧的特殊处理
-    else:
-        # 原有帧率处理
-        if abs(frame_rate - 24) < 0.001 or abs(frame_rate - 25) < 0.001 or abs(frame_rate - 50) < 0.001:
-            total_frames = math.floor(milliseconds * frame_rate / 1000)
-            frames = total_frames % round(frame_rate)
-            total_seconds = total_frames // round(frame_rate)
-        elif abs(frame_rate - 29.97) < 0.001:
-            total_frames = math.floor(milliseconds * 30000 / 1001 / 1000)
-            frames = total_frames % 30
-            total_seconds = total_frames // 30
-        elif abs(frame_rate - 59.94) < 0.001:
-            total_frames = math.floor(milliseconds * 60000 / 1001 / 1000)
-            frames = total_frames % 60
-            total_seconds = total_frames // 60
+        total_frames = math.floor(milliseconds * 24000 / 1001 / 1000)
+        frames = (total_frames % 24) + 1  # 自动加一帧
+        if frames == 24:
+            frames = 0
+            total_seconds = total_frames // 24 + 1
         else:
-            raise ValueError(f"Unsupported frame rate: {frame_rate}")
-        
-        # 计算时、分、秒
-        hours = total_seconds // 3600
-        minutes = (total_seconds % 3600) // 60
-        seconds = total_seconds % 60
-        
-        return f"{hours:02}:{minutes:02}:{seconds:02}:{frames:02}"
+            total_seconds = total_frames // 24
+    elif abs(frame_rate - 24) < 0.001 or abs(frame_rate - 25) < 0.001 or abs(frame_rate - 50) < 0.001:
+        total_frames = math.floor(milliseconds * frame_rate / 1000)
+        frames = total_frames % round(frame_rate)
+        total_seconds = total_frames // round(frame_rate)
+    elif abs(frame_rate - 29.97) < 0.001:
+        total_frames = math.floor(milliseconds * 30000 / 1001 / 1000)
+        frames = total_frames % 30
+        total_seconds = total_frames // 30
+    elif abs(frame_rate - 59.94) < 0.001:
+        total_frames = math.floor(milliseconds * 60000 / 1001 / 1000)
+        frames = total_frames % 60
+        total_seconds = total_frames // 60
+    else:
+        raise ValueError(f"Unsupported frame rate: {frame_rate}")
 
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}:{frames:02d}"
 
 def to_timecode_frames(milliseconds, frame_rate, is_out=False):
     if is_out:
