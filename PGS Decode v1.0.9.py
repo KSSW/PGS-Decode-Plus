@@ -6,6 +6,7 @@ from collections import namedtuple
 from PIL import Image
 from xml.etree.ElementTree import Element, SubElement, tostring, ElementTree
 from collections import namedtuple
+from decimal import Decimal, getcontext
 
 # Constants for Segments
 PDS = int('0x14', 16)
@@ -394,6 +395,9 @@ def format_timestamp(pts):
     # Assuming pts is in seconds, convert it to milliseconds
     return int(pts)
 
+# 设置 decimal 精度
+getcontext().prec = 28  # 你可以根据需要调整精度
+
 def to_timecode_milliseconds(milliseconds):
     milliseconds = int(milliseconds)
     ms = milliseconds % 1000
@@ -403,27 +407,30 @@ def to_timecode_milliseconds(milliseconds):
     return f"{hours:02}:{minutes:02}:{seconds:02},{ms:03}"
 
 def to_timecode_frames_in(milliseconds, frame_rate):
-    total_seconds = milliseconds / 1000.0
+    # 使用 Decimal 进行高精度运算
+    total_seconds = Decimal(milliseconds) / Decimal(1000.0)
 
+    # 针对不同帧率的计算
     if abs(frame_rate - 23.976) < 0.001:
-        total_frames = total_seconds * 24000 / 1001
-        frames = math.floor(total_frames % 24)  # Use floor instead of round
-        total_seconds = math.floor(total_frames / 24)
+        total_frames = total_seconds * Decimal(24000) / Decimal(1001)
+        frames = math.floor(total_frames % 24)  # 取整帧
+        total_seconds = math.floor(total_frames / 24)  # 计算总秒数
     elif abs(frame_rate - 24) < 0.001 or abs(frame_rate - 25) < 0.001 or abs(frame_rate - 50) < 0.001:
-        total_frames = total_seconds * frame_rate
-        frames = math.floor(total_frames % frame_rate)  # Use floor instead of round
-        total_seconds = int(total_seconds)
+        total_frames = total_seconds * Decimal(frame_rate)
+        frames = math.floor(total_frames % frame_rate)  # 取整帧
+        total_seconds = int(total_seconds)  # 取整秒
     elif abs(frame_rate - 29.97) < 0.001:
-        total_frames = total_seconds * 30000 / 1001
-        frames = math.floor(total_frames % 30)
-        total_seconds = math.floor(total_frames / 30)
+        total_frames = total_seconds * Decimal(30000) / Decimal(1001)
+        frames = math.floor(total_frames % 30)  # 取整帧
+        total_seconds = math.floor(total_frames / 30)  # 计算总秒数
     elif abs(frame_rate - 59.94) < 0.001:
-        total_frames = total_seconds * 60000 / 1001
-        frames = math.floor(total_frames % 60)
-        total_seconds = math.floor(total_frames / 60)
+        total_frames = total_seconds * Decimal(60000) / Decimal(1001)
+        frames = math.floor(total_frames % 60)  # 取整帧
+        total_seconds = math.floor(total_frames / 60)  # 计算总秒数
     else:
         raise ValueError(f"Unsupported frame rate: {frame_rate}")
 
+    # 计算小时、分钟和秒
     hours = total_seconds // 3600
     minutes = (total_seconds % 3600) // 60
     seconds = total_seconds % 60
@@ -431,31 +438,35 @@ def to_timecode_frames_in(milliseconds, frame_rate):
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}:{frames:02d}"
 
 def to_timecode_frames_out(milliseconds, frame_rate):
+    # 使用 Decimal 进行高精度运算
+    milliseconds = Decimal(milliseconds)
+    
+    # 针对不同帧率的计算
     if abs(frame_rate - 23.976) < 0.001:
-        total_frames = math.floor(milliseconds * 24000 / 1001 / 1000)
+        total_frames = math.floor(milliseconds * Decimal(24000) / Decimal(1001) / Decimal(1000))
         frames = total_frames % 24
         total_seconds = total_frames // 24
     elif abs(frame_rate - 24) < 0.001 or abs(frame_rate - 25) < 0.001 or abs(frame_rate - 50) < 0.001:
-        total_frames = math.floor(milliseconds * frame_rate / 1000)
+        total_frames = math.floor(milliseconds * Decimal(frame_rate) / Decimal(1000))
         frames = total_frames % round(frame_rate)
         total_seconds = total_frames // round(frame_rate)
     elif abs(frame_rate - 29.97) < 0.001:
-        total_frames = math.floor(milliseconds * 30000 / 1001 / 1000)
+        total_frames = math.floor(milliseconds * Decimal(30000) / Decimal(1001) / Decimal(1000))
         frames = total_frames % 30
         total_seconds = total_frames // 30
     elif abs(frame_rate - 59.94) < 0.001:
-        total_frames = math.floor(milliseconds * 60000 / 1001 / 1000)
+        total_frames = math.floor(milliseconds * Decimal(60000) / Decimal(1001) / Decimal(1000))
         frames = total_frames % 60
         total_seconds = total_frames // 60
     else:
         raise ValueError(f"Unsupported frame rate: {frame_rate}")
 
+    # 计算小时、分钟和秒
     hours = total_seconds // 3600
     minutes = (total_seconds % 3600) // 60
     seconds = total_seconds % 60
 
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}:{frames:02d}"
-
 
 def to_timecode_frames(milliseconds, frame_rate, is_out=False):
     if is_out:
