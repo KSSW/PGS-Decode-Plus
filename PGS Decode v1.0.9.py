@@ -392,7 +392,9 @@ def create_xml_script(events, output_file, frame_rate):
 
 def format_timestamp(pts):
     # Assuming pts is in seconds, convert it to milliseconds
-    return int(pts)
+    result = int(pts)
+    print(result)  # 打印转换后的结果
+    return result  # 返回转换后的结果
 
 def to_timecode_milliseconds(milliseconds):
     milliseconds = int(milliseconds)
@@ -407,12 +409,8 @@ def to_timecode_frames_in(milliseconds, frame_rate):
 
     if abs(frame_rate - 23.976) < 0.001:
         total_frames = total_seconds * 24000 / 1001
-        frames = math.floor(total_frames % 24) + 1  # 自动加一帧
-        if frames == 24:
-            frames = 0
-            total_seconds = math.floor(total_frames / 24) + 1
-        else:
-            total_seconds = math.floor(total_frames / 24)
+        frames = math.floor(total_frames % 24)  # Use floor instead of round
+        total_seconds = math.floor(total_frames / 24)
     elif abs(frame_rate - 24) < 0.001 or abs(frame_rate - 25) < 0.001 or abs(frame_rate - 50) < 0.001:
         total_frames = total_seconds * frame_rate
         frames = math.floor(total_frames % frame_rate)  # Use floor instead of round
@@ -437,12 +435,8 @@ def to_timecode_frames_in(milliseconds, frame_rate):
 def to_timecode_frames_out(milliseconds, frame_rate):
     if abs(frame_rate - 23.976) < 0.001:
         total_frames = math.floor(milliseconds * 24000 / 1001 / 1000)
-        frames = (total_frames % 24) + 1  # 自动加一帧
-        if frames == 24:
-            frames = 0
-            total_seconds = total_frames // 24 + 1
-        else:
-            total_seconds = total_frames // 24
+        frames = total_frames % 24
+        total_seconds = total_frames // 24
     elif abs(frame_rate - 24) < 0.001 or abs(frame_rate - 25) < 0.001 or abs(frame_rate - 50) < 0.001:
         total_frames = math.floor(milliseconds * frame_rate / 1000)
         frames = total_frames % round(frame_rate)
