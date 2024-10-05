@@ -392,9 +392,7 @@ def create_xml_script(events, output_file, frame_rate):
 
 def format_timestamp(pts):
     # Assuming pts is in seconds, convert it to milliseconds
-    result = int(pts)
-    print(result)  # 打印转换后的结果
-    return result  # 返回转换后的结果
+    return int(pts)
 
 def to_timecode_milliseconds(milliseconds):
     milliseconds = int(milliseconds)
@@ -457,6 +455,7 @@ def to_timecode_frames_out(milliseconds, frame_rate):
     seconds = total_seconds % 60
 
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}:{frames:02d}"
+
 
 def to_timecode_frames(milliseconds, frame_rate, is_out=False):
     if is_out:
