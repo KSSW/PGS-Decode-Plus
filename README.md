@@ -1,7 +1,5 @@
 PGS Decoded Project
 =============
-=============
-
 Decoding SUP subtitles and outputting XML+PNG
 
 Usage: PGS_Decoded 1.0.9 <Input_SUP_File> <Output_Images_Directory> [-srt]
